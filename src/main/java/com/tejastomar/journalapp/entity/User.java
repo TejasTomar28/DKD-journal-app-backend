@@ -25,6 +25,7 @@ public class User {
     private String userName;
     private String email;
     private Boolean sentimentAnalysis;
+    private Boolean aiReflectionEnabled = false;
     @NonNull
     private String password;
     @DBRef

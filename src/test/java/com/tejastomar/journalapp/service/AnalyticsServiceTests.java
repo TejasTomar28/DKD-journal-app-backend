@@ -5,6 +5,7 @@ import com.tejastomar.journalapp.entity.JournalEntry;
 import com.tejastomar.journalapp.entity.User;
 import com.tejastomar.journalapp.enums.Sentiment;
 import com.tejastomar.journalapp.services.AnalyticsService;
+import com.tejastomar.journalapp.services.AIAnalyticsInsightService;
 import com.tejastomar.journalapp.services.DashboardService;
 import com.tejastomar.journalapp.services.UserService;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ class AnalyticsServiceTests {
 
     @Mock
     private DashboardService dashboardService;
+
+    @Mock
+    private AIAnalyticsInsightService aiAnalyticsInsightService;
 
     @InjectMocks
     private AnalyticsService analyticsService;

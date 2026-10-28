@@ -23,4 +23,5 @@ public class WeeklyAnalyticsResponseDTO {
     private Map<Sentiment, Integer> sentimentBreakdown;
     private double averageEntriesPerDay;
     private double journalConsistency;
+    private AIAnalyticsInsightResponseDTO aiInsight;
 }

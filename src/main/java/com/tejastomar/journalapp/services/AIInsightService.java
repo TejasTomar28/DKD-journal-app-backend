@@ -41,7 +41,9 @@ public class AIInsightService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AIInsightResponseDTO generateInsight(String username, ObjectId journalId) {
-        JournalEntry journalEntry = getOwnedJournalEntry(username, journalId);
+        User user = getUser(username);
+        verifyAIReflectionEnabled(user);
+        JournalEntry journalEntry = getOwnedJournalEntry(user, journalId);
         verifyAIEnabled(journalEntry);
 
         AIInsight existingInsight = aiInsightRepository.findByJournalEntryId(journalId);
@@ -51,11 +53,15 @@ public class AIInsightService {
 
         // TODO: Publish JournalAIRequestedEvent here when generation moves to Kafka asynchronously.
         AIInsight insight = generateAndParseInsight(username, journalEntry);
+        journalEntry.setSentiment(insight.getDetectedSentiment());
+        journalEntryRepository.save(journalEntry);
         return toResponseDTO(aiInsightRepository.save(insight));
     }
 
     public AIInsightResponseDTO getStoredInsight(String username, ObjectId journalId) {
-        getOwnedJournalEntry(username, journalId);
+        User user = getUser(username);
+        verifyAIReflectionEnabled(user);
+        getOwnedJournalEntry(user, journalId);
         AIInsight insight = aiInsightRepository.findByJournalEntryId(journalId);
         if (insight == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "AI insight not found");
@@ -63,12 +69,19 @@ public class AIInsightService {
         return toResponseDTO(insight);
     }
 
-    private JournalEntry getOwnedJournalEntry(String username, ObjectId journalId) {
+    private User getUser(String username) {
+        User user = userService.findByUserName(username);
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Journal entry is not owned by the current user");
+        }
+        return user;
+    }
+
+    private JournalEntry getOwnedJournalEntry(User user, ObjectId journalId) {
         JournalEntry journalEntry = journalEntryRepository.findById(journalId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Journal entry not found"));
 
-        User user = userService.findByUserName(username);
-        if (user == null || !ownsJournalEntry(user.getJournalEntries(), journalId)) {
+        if (!ownsJournalEntry(user.getJournalEntries(), journalId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Journal entry is not owned by the current user");
         }
         return journalEntry;
@@ -93,6 +106,13 @@ public class AIInsightService {
         }
     }
 
+    private void verifyAIReflectionEnabled(User user) {
+        if (!Boolean.TRUE.equals(user.getAiReflectionEnabled())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "AI reflection is disabled in account settings");
+        }
+    }
+
     private AIInsight generateAndParseInsight(String username, JournalEntry journalEntry) {
         System.out.println("STEP 1 : Building Prompt");
         String prompt = buildPrompt(journalEntry);
@@ -114,7 +134,8 @@ public class AIInsightService {
 
         StringBuilder prompt = new StringBuilder("Journal Context:\n");
         appendField(prompt, "Title", journalEntry.getTitle());
-        appendField(prompt, "Mood", journalEntry.getMood() == null ? null : journalEntry.getMood().name());
+        appendField(prompt, "Current Sentiment", journalEntry.getSentiment() == null
+                ? null : journalEntry.getSentiment().name());
         appendTags(prompt, journalEntry.getTags());
         appendField(prompt, "Reflection Prompt", journalEntry.getReflectionPrompt());
         prompt.append("Journal Content:\n").append(journalEntry.getContent());

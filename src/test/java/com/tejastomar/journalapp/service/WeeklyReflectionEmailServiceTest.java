@@ -1,6 +1,7 @@
 package com.tejastomar.journalapp.service;
 
 import com.tejastomar.journalapp.dto.WeeklyAnalyticsResponseDTO;
+import com.tejastomar.journalapp.dto.AIAnalyticsInsightResponseDTO;
 import com.tejastomar.journalapp.entity.AIInsight;
 import com.tejastomar.journalapp.entity.User;
 import com.tejastomar.journalapp.enums.Sentiment;
@@ -166,7 +167,7 @@ class WeeklyReflectionEmailServiceTest {
                 "No AI reflections were generated this week"));
 
         assertTrue(emailBody.contains(
-                "Not enough mood data this week"));
+                "Not enough sentiment data this week"));
 
         assertTrue(emailBody.contains(
                 "Every entry is a step toward greater self-awareness."));
@@ -176,6 +177,29 @@ class WeeklyReflectionEmailServiceTest {
 
         assertTrue(emailBody.contains(
                 "Keep reflecting. Small steps every day build lifelong self-awareness."));
+    }
+
+    @Test
+    void sendWeeklyReport_includesStoredGlobalAIAnalyticsInsightWithoutCallingOpenAI() {
+        User user = createUser(true);
+        LocalDate today = LocalDate.now();
+        AIAnalyticsInsightResponseDTO globalInsight = AIAnalyticsInsightResponseDTO.builder()
+                .patternInsight("Recent entries appear to show placement-related pressure.")
+                .build();
+        WeeklyAnalyticsResponseDTO analytics = WeeklyAnalyticsResponseDTO.builder()
+                .username("tejas")
+                .weekStart(today.with(DayOfWeek.MONDAY))
+                .weekEnd(today)
+                .aiInsight(globalInsight)
+                .build();
+        when(analyticsService.getWeeklyAnalytics("tejas")).thenReturn(analytics);
+        when(aiInsightRepository.findByUsername("tejas")).thenReturn(List.of());
+
+        weeklyReflectionEmailService.sendWeeklyReport(user);
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendEmail(anyString(), anyString(), bodyCaptor.capture());
+        assertTrue(bodyCaptor.getValue().contains("Recent entries appear to show placement-related pressure."));
     }
 
     private User createUser(boolean optedIn) {

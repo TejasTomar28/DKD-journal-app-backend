@@ -54,6 +54,7 @@ public class PublicController {
         newUser.setUserName(user.getUserName());
         newUser.setPassword(user.getPassword());
         newUser.setSentimentAnalysis(user.isSentimentAnalysis());
+        newUser.setAiReflectionEnabled(false);
         userService.saveNewUser(newUser);
     }
 

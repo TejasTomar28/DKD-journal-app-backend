@@ -1,5 +1,6 @@
 package com.tejastomar.journalapp.controller;
 
+import com.tejastomar.journalapp.dto.JournalEntryResponseDTO;
 import com.tejastomar.journalapp.entity.JournalEntry;
 import com.tejastomar.journalapp.entity.User;
 import com.tejastomar.journalapp.services.JournalEntryService;
@@ -41,12 +42,12 @@ public class JournalEntryController {
             description = "Fetches all journal entries belonging to the authenticated user."
     )
     @GetMapping
-    public ResponseEntity<?> getAllJournalEntriesOfUser(){
+    public ResponseEntity<List<JournalEntryResponseDTO>> getAllJournalEntriesOfUser(){
         String username = SecurityUtil.getCurrentUsername();
         User user=userService.findByUserName(username);
         List<JournalEntry> all = user.getJournalEntries();
         if(all!=null && !all.isEmpty()){
-            return new ResponseEntity<>(all,HttpStatus.OK);
+            return ResponseEntity.ok(toResponseDTOs(all));
         }
         return new ResponseEntity<>(HttpStatus.NOT_FOUND);
     }
@@ -57,7 +58,7 @@ public class JournalEntryController {
             description = "Searches the authenticated user's journal titles and optionally filters by sentiment and inclusive date range. Sort defaults to desc."
     )
     @GetMapping("/search")
-    public ResponseEntity<List<JournalEntry>> searchJournalEntries(
+    public ResponseEntity<List<JournalEntryResponseDTO>> searchJournalEntries(
             @RequestParam(required = false) String title,
             @RequestParam(required = false) Sentiment sentiment,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -67,7 +68,7 @@ public class JournalEntryController {
             List<JournalEntry> entries = journalSearchService.searchJournalEntries(
                     SecurityUtil.getCurrentUsername(), title, sentiment, startDate, endDate, sort
             );
-            return ResponseEntity.ok(entries);
+            return ResponseEntity.ok(toResponseDTOs(entries));
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.badRequest().build();
         }
@@ -79,11 +80,11 @@ public class JournalEntryController {
             description = "Creates a new journal entry for the authenticated user."
     )
     @PostMapping
-    public ResponseEntity<JournalEntry> createEntry(@RequestBody JournalEntry myEntry){ //requestbody ka kaam hai data(from body) ko object mei convert karna
+    public ResponseEntity<JournalEntryResponseDTO> createEntry(@RequestBody JournalEntry myEntry){ //requestbody ka kaam hai data(from body) ko object mei convert karna
        try{
            String username = SecurityUtil.getCurrentUsername();
-           journalEntryService.saveEntry(myEntry, username);
-           return new ResponseEntity<>(HttpStatus.CREATED);
+           JournalEntry savedEntry = journalEntryService.saveEntry(myEntry, username);
+           return new ResponseEntity<>(JournalEntryResponseDTO.from(savedEntry), HttpStatus.CREATED);
        }catch(Exception e){
            e.printStackTrace();
            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
@@ -96,7 +97,7 @@ public class JournalEntryController {
             description = "Retrieves a specific journal entry using its unique identifier."
     )
     @GetMapping("id/{myId}")
-    public ResponseEntity<JournalEntry> getJournalEntryById(@PathVariable String myId){
+    public ResponseEntity<JournalEntryResponseDTO> getJournalEntryById(@PathVariable String myId){
         ObjectId id = new ObjectId(myId);
         String username = SecurityUtil.getCurrentUsername();
         User user=userService.findByUserName(username);
@@ -104,7 +105,7 @@ public class JournalEntryController {
         if(!collect.isEmpty()) {
             Optional<JournalEntry> journalEntry = journalEntryService.findById(id);
             if(journalEntry.isPresent()){
-                return new ResponseEntity<>(journalEntry.get(), HttpStatus.OK);
+                return ResponseEntity.ok(JournalEntryResponseDTO.from(journalEntry.get()));
             }
         }
         return new ResponseEntity<>(HttpStatus.NOT_FOUND);
@@ -132,7 +133,7 @@ public class JournalEntryController {
             description = "Updates title and content of an existing journal entry."
     )
     @PutMapping("id/{myId}")
-    public ResponseEntity<JournalEntry> updateJournalById(@PathVariable ObjectId myId, @RequestBody JournalEntry newEntry) {
+    public ResponseEntity<JournalEntryResponseDTO> updateJournalById(@PathVariable ObjectId myId, @RequestBody JournalEntry newEntry) {
         String username = SecurityUtil.getCurrentUsername();
         User user=userService.findByUserName(username);
         List<JournalEntry> collect=user.getJournalEntries().stream().filter(entry->entry.getId().equals(myId)).collect(Collectors.toList());
@@ -142,8 +143,8 @@ public class JournalEntryController {
                 JournalEntry old=journalEntry.get();
                 old.setTitle(newEntry.getTitle()!=null && !newEntry.getTitle().equals("") ? newEntry.getTitle(): old.getTitle());
                 old.setContent(newEntry.getContent()!=null && !newEntry.getContent().equals("") ? newEntry.getContent() : old.getContent());
-                if (newEntry.getMood() != null) {
-                    old.setMood(newEntry.getMood());
+                if (newEntry.getSentiment() != null) {
+                    old.setSentiment(newEntry.getSentiment());
                 }
 
                 if (newEntry.getTags() != null) {
@@ -155,11 +156,17 @@ public class JournalEntryController {
                 }
 
                 old.setAiEnabled(newEntry.isAiEnabled());
-                journalEntryService.saveEntry(old);
-                return new ResponseEntity<>(old,HttpStatus.OK);
+                JournalEntry savedEntry = journalEntryService.saveEntry(old);
+                return ResponseEntity.ok(JournalEntryResponseDTO.from(savedEntry));
             }
         }
         return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+    }
+
+    private List<JournalEntryResponseDTO> toResponseDTOs(List<JournalEntry> entries) {
+        return entries.stream()
+                .map(JournalEntryResponseDTO::from)
+                .collect(Collectors.toList());
     }
 
 }

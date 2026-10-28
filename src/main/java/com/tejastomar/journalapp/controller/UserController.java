@@ -1,6 +1,9 @@
 package com.tejastomar.journalapp.controller;
 
 import com.tejastomar.journalapp.api.response.WeatherResponse;
+import com.tejastomar.journalapp.dto.AIReflectionSettingsRequestDTO;
+import com.tejastomar.journalapp.dto.AIReflectionSettingsResponseDTO;
+import com.tejastomar.journalapp.dto.UserGreetingResponseDTO;
 import com.tejastomar.journalapp.entity.User;
 import com.tejastomar.journalapp.repository.UserRepository;
 import com.tejastomar.journalapp.services.UserService;
@@ -12,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
 
 @RestController
 @RequestMapping("/user")//puri class pe mapping kar dega
@@ -42,6 +47,31 @@ public class UserController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
+    @Operation(
+            summary = "Get AI Reflection Setting",
+            description = "Returns whether AI reflection features are enabled for the authenticated user."
+    )
+    @GetMapping("/ai-reflection")
+    public ResponseEntity<AIReflectionSettingsResponseDTO> getAIReflectionSetting() {
+        User user = userService.findByUserName(SecurityUtil.getCurrentUsername());
+        return ResponseEntity.ok(AIReflectionSettingsResponseDTO.builder()
+                .enabled(Boolean.TRUE.equals(user.getAiReflectionEnabled()))
+                .build());
+    }
+
+    @Operation(
+            summary = "Update AI Reflection Setting",
+            description = "Enables or disables user-level AI pattern reflections. Individual journal content still requires per-journal AI consent."
+    )
+    @PutMapping("/ai-reflection")
+    public ResponseEntity<Void> updateAIReflectionSetting(
+            @Valid @RequestBody AIReflectionSettingsRequestDTO request) {
+        User user = userService.findByUserName(SecurityUtil.getCurrentUsername());
+        user.setAiReflectionEnabled(request.getEnabled());
+        userService.saveUser(user);
+        return ResponseEntity.noContent().build();
+    }
+
 
     @Operation(
             summary = "Delete User Account",
@@ -56,15 +86,37 @@ public class UserController {
 
     @Operation(
             summary = "Get Personalized Greeting",
-            description = "Returns a greeting message along with current weather information."
+            description = "Returns dashboard-friendly greeting and current weather information."
     )
     @GetMapping
-    public ResponseEntity<?> greeting(){
+    public ResponseEntity<UserGreetingResponseDTO> greeting(){
+        String username = SecurityUtil.getCurrentUsername();
         WeatherResponse weatherResponse= weatherService.getWeather("Delhi");
-        String greeting="";
-        if(weatherResponse != null){
-            greeting = ", Weather feels like " + weatherResponse.getCurrent().getFeelsLike();
+        return ResponseEntity.ok(UserGreetingResponseDTO.builder()
+                .username(username)
+                .message("Welcome back, " + username + "!")
+                .weather(toWeatherDTO(weatherResponse))
+                .build());
+    }
+
+    private UserGreetingResponseDTO.WeatherDTO toWeatherDTO(WeatherResponse weatherResponse) {
+        if (weatherResponse == null || weatherResponse.getCurrent() == null) {
+            return null;
         }
-        return new ResponseEntity<>("Hi " + SecurityUtil.getCurrentUsername() + greeting ,HttpStatus.OK);
+
+        return UserGreetingResponseDTO.WeatherDTO.builder()
+                .city("Delhi")
+                .temperature(weatherResponse.getCurrent().getTemperature())
+                .feelsLike(weatherResponse.getCurrent().getFeelsLike())
+                .description(getWeatherDescription(weatherResponse))
+                .build();
+    }
+
+    private String getWeatherDescription(WeatherResponse weatherResponse) {
+        if (weatherResponse.getCurrent().getWeatherDescriptions() == null
+                || weatherResponse.getCurrent().getWeatherDescriptions().isEmpty()) {
+            return null;
+        }
+        return weatherResponse.getCurrent().getWeatherDescriptions().get(0);
     }
 }

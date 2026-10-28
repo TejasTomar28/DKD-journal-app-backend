@@ -27,6 +27,9 @@ public class AnalyticsService {
     @Autowired
     private DashboardService dashboardService;
 
+    @Autowired
+    private AIAnalyticsInsightService aiAnalyticsInsightService;
+
     public WeeklyAnalyticsResponseDTO getWeeklyAnalytics(String username) {
         User user = getUser(username);
         LocalDate today = LocalDate.now();
@@ -48,6 +51,7 @@ public class AnalyticsService {
                 .sentimentBreakdown(sentimentBreakdown)
                 .averageEntriesPerDay(calculateAverageEntriesPerDay(weeklyEntries.size(), elapsedDays))
                 .journalConsistency(calculateJournalConsistency(journalDays.size(), elapsedDays))
+                .aiInsight(aiAnalyticsInsightService.getLatestInsightIfEnabled(user))
                 .build();
     }
 

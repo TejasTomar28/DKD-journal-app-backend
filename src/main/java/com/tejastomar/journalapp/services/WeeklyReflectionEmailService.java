@@ -2,6 +2,7 @@ package com.tejastomar.journalapp.services;
 
 import com.tejastomar.journalapp.dto.WeeklyAnalyticsResponseDTO;
 import com.tejastomar.journalapp.dto.WeeklyReflectionEmailDTO;
+import com.tejastomar.journalapp.dto.AIAnalyticsInsightResponseDTO;
 import com.tejastomar.journalapp.entity.AIInsight;
 import com.tejastomar.journalapp.entity.User;
 import com.tejastomar.journalapp.enums.Sentiment;
@@ -56,6 +57,7 @@ public class WeeklyReflectionEmailService {
         WeeklyAnalyticsResponseDTO analytics = analyticsService.getWeeklyAnalytics(user.getUserName());
         List<AIInsight> weeklyInsights = getWeeklyInsights(user.getUserName(), analytics.getWeekStart(), analytics.getWeekEnd());
         AIInsight latestInsight = getLatestInsight(weeklyInsights);
+        AIAnalyticsInsightResponseDTO analyticsInsight = analytics.getAiInsight();
 
         return WeeklyReflectionEmailDTO.builder()
                 .username(user.getUserName())
@@ -65,7 +67,7 @@ public class WeeklyReflectionEmailService {
                 .journalConsistency(analytics.getJournalConsistency())
                 .dominantSentiment(analytics.getDominantSentiment())
                 .averageEntriesPerDay(analytics.getAverageEntriesPerDay())
-                .weeklySummary(buildWeeklySummary(weeklyInsights))
+                .weeklySummary(buildWeeklySummary(weeklyInsights, analyticsInsight))
                 .positiveObservation(getInsightValue(latestInsight, AIInsight::getPositiveObservation, DEFAULT_POSITIVE_OBSERVATION))
                 .reflectionQuestion(getInsightValue(latestInsight, AIInsight::getReflectionQuestion, DEFAULT_REFLECTION_QUESTION))
                 .encouragement(getInsightValue(latestInsight, AIInsight::getEncouragement, DEFAULT_ENCOURAGEMENT))
@@ -102,8 +104,12 @@ public class WeeklyReflectionEmailService {
                 .orElse(null);
     }
 
-    private String buildWeeklySummary(List<AIInsight> insights) {
+    private String buildWeeklySummary(List<AIInsight> insights, AIAnalyticsInsightResponseDTO analyticsInsight) {
         StringBuilder summary = new StringBuilder();
+
+        if (analyticsInsight != null) {
+            appendSummary(summary, analyticsInsight.getPatternInsight());
+        }
 
         for (AIInsight insight : insights) {
             appendSummary(summary, insight.getSummary());
@@ -151,7 +157,7 @@ public class WeeklyReflectionEmailService {
     }
 
     private String formatSentiment(Sentiment sentiment){
-        return sentiment == null ? "Not enough mood data this week" : sentiment.toString();
+        return sentiment == null ? "Not enough sentiment data this week" : sentiment.toString();
     }
 
     @FunctionalInterface

@@ -67,6 +67,19 @@ class AIInsightServiceTests {
     }
 
     @Test
+    void generateInsight_rejectsRequestsWhenGlobalAIReflectionIsDisabled() {
+        JournalEntry journalEntry = journalEntry(true);
+        when(userService.findByUserName("tejas")).thenReturn(user("tejas", List.of(journalEntry), false));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> aiInsightService.generateInsight("tejas", journalEntry.getId()));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        verify(journalEntryRepository, never()).findById(any());
+        verify(openAIService, never()).sendPrompt(any(), any());
+    }
+
+    @Test
     void generateInsight_returnsStoredInsightWithoutCallingOpenAI() {
         JournalEntry journalEntry = journalEntry(true);
         AIInsight storedInsight = insight(journalEntry.getId());
@@ -94,11 +107,13 @@ class AIInsightServiceTests {
         assertEquals("A concise reflection.", response.getSummary());
         assertEquals(Sentiment.HAPPY, response.getDetectedSentiment());
         verify(aiInsightRepository).save(any(AIInsight.class));
+        verify(journalEntryRepository).save(journalEntry);
+        assertEquals(Sentiment.HAPPY, journalEntry.getSentiment());
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
         verify(openAIService).sendPrompt(eq("Configured system prompt"), promptCaptor.capture());
         String prompt = promptCaptor.getValue();
         assertTrue(prompt.contains("Title: A peaceful day"));
-        assertTrue(prompt.contains("Mood: HAPPY"));
+        assertTrue(prompt.contains("Current Sentiment: HAPPY"));
         assertTrue(prompt.contains("Tags: growth, work"));
         assertTrue(prompt.contains("Reflection Prompt: What helped you feel grounded today?"));
         assertTrue(prompt.contains("Journal Content:\nI had a productive and peaceful day."));
@@ -108,7 +123,7 @@ class AIInsightServiceTests {
     void generateInsight_rejectsJournalEntriesNotOwnedByCurrentUser() {
         JournalEntry journalEntry = journalEntry(true);
         when(journalEntryRepository.findById(journalEntry.getId())).thenReturn(Optional.of(journalEntry));
-        when(userService.findByUserName("tejas")).thenReturn(user("tejas", List.of()));
+        when(userService.findByUserName("tejas")).thenReturn(user("tejas", List.of(), true));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> aiInsightService.generateInsight("tejas", journalEntry.getId()));
@@ -133,7 +148,7 @@ class AIInsightServiceTests {
 
     private void mockOwnedJournal(String username, JournalEntry journalEntry) {
         when(journalEntryRepository.findById(journalEntry.getId())).thenReturn(Optional.of(journalEntry));
-        when(userService.findByUserName(username)).thenReturn(user(username, List.of(journalEntry)));
+        when(userService.findByUserName(username)).thenReturn(user(username, List.of(journalEntry), true));
     }
 
     private JournalEntry journalEntry(boolean aiEnabled) {
@@ -142,16 +157,17 @@ class AIInsightServiceTests {
         entry.setTitle("A peaceful day");
         entry.setContent("I had a productive and peaceful day.");
         entry.setAiEnabled(aiEnabled);
-        entry.setMood(Sentiment.HAPPY);
+        entry.setSentiment(Sentiment.HAPPY);
         entry.setTags(List.of("growth", "work"));
         entry.setReflectionPrompt("What helped you feel grounded today?");
         return entry;
     }
 
-    private User user(String username, List<JournalEntry> entries) {
+    private User user(String username, List<JournalEntry> entries, boolean aiReflectionEnabled) {
         User user = new User();
         user.setUserName(username);
         user.setJournalEntries(entries);
+        user.setAiReflectionEnabled(aiReflectionEnabled);
         return user;
     }
 
